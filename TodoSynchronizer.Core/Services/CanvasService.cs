@@ -28,7 +28,8 @@ namespace TodoSynchronizer.Core.Services
         {
             Client = new HttpClient()
             {
-                BaseAddress = new Uri("https://oc.sjtu.edu.cn")
+                BaseAddress = new Uri("https://oc.sjtu.edu.cn"),
+                Timeout = TimeSpan.FromSeconds(180)
             };
             Client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
 
