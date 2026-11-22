@@ -5,22 +5,23 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Probe
         env:
           CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
         run: |
-          curl -sS -o /tmp/active.json --max-time 60 \
-            -H "Authorization: Bearer $CANVAS_TOKEN" \
-            "https://oc.sjtu.edu.cn/api/v1/courses?enrollment_state=active&per_page=100&page=1"
-          echo "active_count=$(jq 'length' /tmp/active.json)"
-          jq -r '.[] | "course=\(.id) state=\(.workflow_state) restricted=\(.restrict_enrollments_to_course_dates) enroll=\(.enrollments[0].type // "none")"' /tmp/active.json
-          for id in $(jq -r '.[] | select(.enrollments[0].type == "student") | .id' /tmp/active.json); do
-            for ep in assignments quizzes; do
-              printf "course=%s ep=%s " "$id" "$ep"
-              curl -sS -o /dev/null -w "http=%{http_code} time=%{time_total}s\n" --max-time 20 \
+          for id in 93965 93753 93145 94319 93878 94098 93915 93954; do
+            echo "== course $id assignments =="
+            curl -sS -D /tmp/h -o /dev/null --max-time 15 \
+              -H "Authorization: Bearer $CANVAS_TOKEN" \
+              "https://oc.sjtu.edu.cn/api/v1/courses/$id/assignments?per_page=10&page=1" || echo "page1 curl failed"
+            last=$(grep -i '^link:' /tmp/h | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p' | tail -1)
+            echo "last=${last:-1}"
+            for page in $(seq 1 ${last:-1}); do
+              printf "page=%s " "$page"
+              curl -sS -o /dev/null -w "http=%{http_code} time=%{time_total}s\n" --max-time 15 \
                 -H "Authorization: Bearer $CANVAS_TOKEN" \
-                "https://oc.sjtu.edu.cn/api/v1/courses/$id/$ep?per_page=10&page=1" || echo "curl failed"
+                "https://oc.sjtu.edu.cn/api/v1/courses/$id/assignments?per_page=10&page=$page" || echo "curl failed"
             done
           done
