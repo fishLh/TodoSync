@@ -1,0 +1,26 @@
+name: Canvas Active Courses Probe
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe
+        env:
+          CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
+        run: |
+          curl -sS -o /tmp/active.json --max-time 60 \
+            -H "Authorization: Bearer $CANVAS_TOKEN" \
+            "https://oc.sjtu.edu.cn/api/v1/courses?enrollment_state=active&per_page=100&page=1"
+          echo "active_count=$(jq 'length' /tmp/active.json)"
+          jq -r '.[] | "course=\(.id) state=\(.workflow_state) restricted=\(.restrict_enrollments_to_course_dates) enroll=\(.enrollments[0].type // "none")"' /tmp/active.json
+          for id in $(jq -r '.[] | select(.enrollments[0].type == "student") | .id' /tmp/active.json); do
+            for ep in assignments quizzes; do
+              printf "course=%s ep=%s " "$id" "$ep"
+              curl -sS -o /dev/null -w "http=%{http_code} time=%{time_total}s\n" --max-time 20 \
+                -H "Authorization: Bearer $CANVAS_TOKEN" \
+                "https://oc.sjtu.edu.cn/api/v1/courses/$id/$ep?per_page=10&page=1" || echo "curl failed"
+            done
+          done
